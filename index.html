@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DialTrack - LocalStorage με Backup</title>
+<title>DialTrack - Διαχείριση με Ιστορικό Αλλαγών</title>
 <style>
 body{font-family:Arial,sans-serif;background:#111;color:#eee;margin:0;min-height:100vh;display:flex}
 .sidebar{width:240px;background:#1b1b1b;padding:16px;box-sizing:border-box;border-right:1px solid #333}
@@ -22,6 +22,8 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 .hidden{display:none}
 .backup-btn{background:#1e4620;border:1px solid #2e6931}
 .import-btn{background:#2a4d6c;border:1px solid #35628a}
+.edit-btn{background:#3a3a3a;border:1px solid #555;display:inline-block;width:auto;padding:5px 10px;font-size:12px;margin-right:5px}
+.del-btn{background:#5a1818;border:1px solid #822;display:inline-block;width:auto;padding:5px 10px;font-size:12px}
 </style>
 </head>
 <body>
@@ -58,25 +60,25 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 </div>
 
 <div id="history" class="view hidden">
-<div class="card"><h3>Ιστορικό</h3>
+<div class="card"><h3>Ιστορικό Αλλαγών</h3>
 <table class="table">
-<thead><tr><th>Ημ/νία</th><th>Καμπάνια</th><th>Αριθμός</th><th>Σημείωση</th></tr></thead>
+<thead><tr><th>Ημ/νία</th><th>Καμπάνια</th><th>Ενέργεια / Αλλαγή</th></tr></thead>
 <tbody id="historyBody"></tbody>
 </table>
 </div>
 </div>
 </div>
 
-<!-- Camp Modal -->
+    <!-- Camp Modal -->
 <div class="modal" id="campModal">
 <div class="modalbox">
-<h3>Νέα Καμπάνια</h3>
+<h3 id="campModalTitle">Νέα Καμπάνια</h3>
 <label>Κωδικός</label><input id="campCode">
 <label>Όνομα</label><input id="campName">
 <label>Συνδεδεμένος Αριθμός</label><select id="campNumberSelect"></select>
 <label>Σημείωση</label><textarea id="campNote" rows="2"></textarea>
 <button onclick="saveCampaign()">Αποθήκευση</button>
-<button style="background:#555" onclick="closeModal('campModal')">Κλείσιμο</button>
+<button style="background:#555" onclick="closeCampModal()">Κλείσιμο</button>
 </div>
 </div>
 
@@ -90,9 +92,9 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 <button style="background:#555" onclick="closeModal('numModal')">Κλείσιμο</button>
 </div>
 </div>
-
 <script>
 let campaigns = [], numbers = [], history = [];
+let editCampId = null;
 
 function loadData() {
     let localC = localStorage.getItem('dt_campaigns');
@@ -121,61 +123,121 @@ function showView(id) {
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+function closeCampModal() {
+    closeModal('campModal');
+    editCampId = null;
+    document.getElementById('campModalTitle').innerText = "Νέα Καμπάνια";
+    document.getElementById('campCode').value = "";
+    document.getElementById('campName').value = "";
+    document.getElementById('campNote').value = "";
+    document.getElementById('campNumberSelect').value = "";
+}
+
 function render() {
     document.getElementById('stats').innerHTML = '<div class="badge">Καμπάνιες: ' + campaigns.length + '</div><div class="badge">Αριθμοί: ' + numbers.length + '</div>';
     
-    let opts = '<option value="">Επιλέξτε Αριθμό</option>';
-    numbers.forEach(n => opts += '<option value="' + n.id + '">' + n.number + '</option>');
+    let opts = '<option value="">Χωρίς Αριθμό</option>';
+    numbers.forEach(n => opts += '<option value="' + n.id + '">' + n.number + ' (' + (n.label || '—') + ')</option>');
     document.getElementById('campNumberSelect').innerHTML = opts;
 
     let grid = '', list = '';
     campaigns.forEach(c => {
         const n = numbers.find(num => String(num.id) === String(c.active_num_id));
-        grid += '<div class="card"><strong>' + (c.code ? c.code + ' - ' : '') + c.name + '</strong><br><small>Αριθμός: ' + (n ? n.number : 'Χωρίς') + '</small><br><button style="width:auto;padding:4px 8px;margin-top:5px" onclick="deleteItem(\'campaigns\',' + c.id + ')">Διαγραφή</button></div>';
-        list += '<div class="card"><strong>' + c.name + '</strong> - ' + (c.note || '—') + '</div>';
+        const dispNum = n ? n.number : 'Χωρίς Αριθμό';
+        const label = c.code ? c.code + ' - ' + c.name : c.name;
+        
+        grid += '<div class="card"><strong>' + label + '</strong><br><small>Ενεργός Αριθμός: ' + dispNum + '</small><br><div style="margin-top:8px"><button class="edit-btn" onclick="openEditCamp(' + c.id + ')">🔄 Αλλαγή Αριθμού</button><button class="del-btn" onclick="deleteItem(\'campaigns\', ' + c.id + ')">Διαγραφή</button></div></div>';
+        list += '<div class="card"><strong>' + label + '</strong> - ' + (c.note || '—') + '</div>';
     });
-    document.getElementById('campaignGrid').innerHTML = grid || 'Καμία καμπάνια';
-    document.getElementById('campaignList').innerHTML = list || 'Καμία καμπάνια';
+    document.getElementById('campaignGrid').innerHTML = grid || '<div class="small">Καμία καμπάνια</div>';
+    document.getElementById('campaignList').innerHTML = list || '<div class="small">Καμία καμπάνια</div>';
 
     let numHtml = '';
-    numbers.forEach(n => numHtml += '<div class="card"><strong>' + n.number + '</strong> (' + (n.label || '—') + ')<br><button style="width:auto;padding:4px 8px;margin-top:5px" onclick="deleteItem(\'numbers\',' + n.id + ')">Διαγραφή</button></div>');
-    document.getElementById('numbersList').innerHTML = numHtml || 'Κανένας αριθμός';
+    numbers.forEach(n => numHtml += '<div class="card"><strong>' + n.number + '</strong> (' + (n.label || '—') + ')<br><button class="del-btn" style="margin-top:5px" onclick="deleteItem(\'numbers\', ' + n.id + ')">Διαγραφή</button></div>');
+    document.getElementById('numbersList').innerHTML = numHtml || '<div class="small">Κανένας αριθμός</div>';
 
     let histHtml = '';
     history.forEach(h => {
-        const c = campaigns.find(camp => String(camp.id) === String(h.camp_id));
-        histHtml += '<tr><td>' + new Date(h.created_at).toLocaleDateString('el-GR') + '</td><td>' + (c ? c.name : '—') + '</td><td>' + h.number + '</td><td>' + h.note + '</td></tr>';
+        histHtml += '<tr><td>' + fmtDate(h.created_at) + '</td><td><strong>' + h.camp_name + '</strong></td><td>' + h.note + '</td></tr>';
     });
-    document.getElementById('historyBody').innerHTML = histHtml || '<tr><td colspan="4">Κενό ιστορικό</td></tr>';
+    document.getElementById('historyBody').innerHTML = histHtml || '<tr><td colspan="3">Κενό ιστορικό</td></tr>';
 }
 
 function saveCampaign() {
     const name = document.getElementById('campName').value.trim();
+    const code = document.getElementById('campCode').value.trim();
+    const note = document.getElementById('campNote').value.trim();
+    const active_num_id = document.getElementById('campNumberSelect').value;
+    
     if(!name) return alert('Βάλε όνομα!');
-    const newCamp = {
-        id: Date.now(),
-        code: document.getElementById('campCode').value.trim(),
-        name: name,
-        active_num_id: document.getElementById('campNumberSelect').value,
-        note: document.getElementById('campNote').value.trim()
-    };
-    campaigns.push(newCamp);
-    const n = numbers.find(num => String(num.id) === String(newCamp.active_num_id));
-    history.unshift({ id: Date.now()+1, camp_id: newCamp.id, number: n ? n.number : 'Χωρίς', note: 'Νέα Καμπάνια', created_at: new Date().toISOString() });
-    closeModal('campModal'); saveData();
+
+    const selectedNumObj = numbers.find(num => String(num.id) === String(active_num_id));
+    const nextNumText = selectedNumObj ? selectedNumObj.number : 'Χωρίς Αριθμό';
+    const currentLabel = code ? code + ' - ' + name : name;
+
+    if(editCampId) {
+        const oldCamp = campaigns.find(c => String(c.id) === String(editCampId));
+        const oldNumObj = numbers.find(num => String(num.id) === String(oldCamp.active_num_id));
+        const prevNumText = oldNumObj ? oldNumObj.number : 'Χωρίς Αριθμό';
+
+        if (String(oldCamp.active_num_id) !== String(active_num_id)) {
+            history.unshift({
+                id: Date.now(),
+                camp_name: currentLabel,
+                note: 'Ο αριθμός άλλαξε από ' + prevNumText + ' σε ' + nextNumText,
+                created_at: new Date().toISOString()
+            });
+        }
+
+        campaigns = campaigns.map(c => String(c.id) === String(editCampId) ? { ...c, code, name, note, active_num_id } : c);
+    } else {
+        const newCamp = { id: Date.now(), code, name, note, active_num_id };
+        campaigns.push(newCamp);
+        
+        history.unshift({
+            id: Date.now() + 1,
+            camp_name: currentLabel,
+            note: 'Δημιουργία καμπάνιας με αριθμό: ' + nextNumText,
+            created_at: new Date().toISOString()
+        });
+    }
+    
+    closeCampModal();
+    saveData();
+}
+
+function openEditCamp(id) {
+    editCampId = id;
+    const c = campaigns.find(x => String(x.id) === String(id));
+    if(c) {
+        document.getElementById('campModalTitle').innerText = "Επεξεργασία / Αλλαγή Αριθμού";
+        document.getElementById('campCode').value = c.code || '';
+        document.getElementById('campName').value = c.name || '';
+        document.getElementById('campNote').value = c.note || '';
+        document.getElementById('campNumberSelect').value = c.active_num_id || '';
+        openModal('campModal');
+    }
 }
 
 function saveNumber() {
     const val = document.getElementById('numValue').value.trim();
     if(!val) return alert('Βάλε αριθμό!');
     numbers.push({ id: Date.now(), number: val, label: document.getElementById('numLabel').value.trim() });
-    closeModal('numModal'); saveData();
+    closeModal('numModal'); 
+    saveData();
 }
 
 function deleteItem(type, id) {
-    if(!confirm('Διαγραφή;')) return;
-    if(type === 'campaigns') { campaigns = campaigns.filter(c => String(c.id) !== String(id)); }
-    else { numbers = numbers.filter(n => String(n.id) !== String(id)); }
+    if(!confirm('Θέλετε σίγουρα διαγραφή;')) return;
+    if(type === 'campaigns') { 
+        const c = campaigns.find(camp => String(camp.id) === String(id));
+        const label = c ? (c.code ? c.code + ' - ' : '') + c.name : 'Καμπάνια';
+        history.unshift({ id: Date.now(), camp_name: label, note: 'Διαγραφή καμπάνιας', created_at: new Date().toISOString() });
+        campaigns = campaigns.filter(c => String(c.id) !== String(id)); 
+    } else { 
+        campaigns = campaigns.map(c => String(c.active_num_id) === String(id) ? { ...c, active_num_id: "" } : c);
+        numbers = numbers.filter(n => String(n.id) !== String(id)); 
+    }
     saveData();
 }
 
@@ -206,7 +268,12 @@ function uploadBackup(event) {
     reader.readAsText(file);
 }
 
-function resetData() { if(confirm('⚠️ Διαγραφή όλων των τοπικών δεδομένων;')) { campaigns = []; numbers = []; history = []; saveData(); } }
+function fmtDate(isoString) { 
+    if(!isoString) return '—';
+    return new Date(isoString).toLocaleString('el-GR');
+}
+
+function resetData() { if(confirm('⚠️ Διαγραφή όλων των τοπικών δεδομένων και ιστορικού;')) { campaigns = []; numbers = []; history = []; saveData(); } }
 
 window.onload = loadData;
 </script>
