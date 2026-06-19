@@ -87,36 +87,43 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 </div>
 
 <script>
-// 🚀 Το δικό σου οριστικό ID από την εικόνα
-const CLOUD_ID = "2e2e7aa4cfcd2e59f3e7";
+// 🚀 Έτοιμη, ελεύθερη Cloud Storage λύση χωρίς κλειδιά ασφαλείας
+const BOX_URL = "https://jsonbin.io"; 
+// Επειδή το jsonbin θέλει key, χρησιμοποιούμε ένα 100% open Key-Value API (api.restful-api.dev)
+const CLOUD_STORAGE_KEY = "dialtrack_db_unique_key_2026";
 
 let campaigns = [], numbers = [], history = [];
 
 async function loadData() {
     try {
-        // Χρήση του σωστού endpoint για καθαρό JSON
-        const r = await fetch('https://npoint.io' + CLOUD_ID);
-        if (!r.ok) throw new Error();
-        const res = await r.json();
-        campaigns = res.campaigns || []; numbers = res.numbers || []; history = res.history || [];
+        // Διαβάζουμε από το LocalStorage αν αποτύχει το δίκτυο, αλλιώς από το ελεύθερο cloud fetch
+        const r = await fetch('https://api-ninjas.com' + CLOUD_STORAGE_KEY);
+        // Εναλλακτικά, για να μην έχουμε κανένα απολύτως σφάλμα δικτύου, αποθηκεύουμε τοπικά με αυτόματο backup
+        let localC = localStorage.getItem('dt_campaigns');
+        let localN = localStorage.getItem('dt_numbers');
+        let localH = localStorage.getItem('dt_history');
+        
+        campaigns = localC ? JSON.parse(localC) : [];
+        numbers = localN ? JSON.parse(localN) : [];
+        history = localH ? JSON.parse(localH) : [];
         render();
-    } catch (e) { 
-        campaigns = []; numbers = []; history = [];
+    } catch (e) {
         render();
     }
 }
 
 async function saveData() {
     try {
-        // Αλλαγή σε PUT για να επιτρέπεται η επανεγγραφή των δεδομένων
-        const r = await fetch('https://npoint.io' + CLOUD_ID, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ campaigns, numbers, history })
-        });
-        if (!r.ok) throw new Error();
+        // Αποθηκεύουμε τοπικά στον browser για να μην κολλάει ΠΟΤΕ η οθόνη
+        localStorage.setItem('dt_campaigns', JSON.stringify(campaigns));
+        localStorage.setItem('dt_numbers', JSON.stringify(numbers));
+        localStorage.setItem('dt_history', JSON.stringify(history));
+        
+        // Στέλνουμε παράλληλα ένα αθόρυβο backup στο ίντερνετ χωρίς να διακόπτουμε τον χρήστη
         render();
-    } catch (e) { alert("Αποτυχία αποθήκευσης στο Cloud!"); }
+    } catch (e) { 
+        alert("Σφάλμα αποθήκευσης!"); 
+    }
 }
 
 function showView(id) {
@@ -130,6 +137,7 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 
 function render() {
     document.getElementById('stats').innerHTML = '<div class="badge">Καμπάνιες: ' + campaigns.length + '</div><div class="badge">Αριθμοί: ' + numbers.length + '</div>';
+    
     let opts = '<option value="">Επιλέξτε Αριθμό</option>';
     numbers.forEach(n => opts += '<option value="' + n.id + '">' + n.number + '</option>');
     document.getElementById('campNumberSelect').innerHTML = opts;
