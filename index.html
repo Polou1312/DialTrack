@@ -108,7 +108,7 @@ async function loadData() {
 async function saveData() {
     try {
         const r = await fetch('https://npoint.io' + CLOUD_ID, {
-            method: "POST",
+            method: "PUT", // 👈 Αλλαγή από POST σε PUT για σωστή ενημέρωση των δεδομένων
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ campaigns, numbers, history })
         });
