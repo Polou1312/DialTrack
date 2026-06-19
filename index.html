@@ -89,7 +89,9 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 <script>
 const SUPABASE_URL = "https://arlpuqxklhdocaeyevrr.supabase.co";
 const SUPABASE_KEY = "sb_publishable_b4ZPk4iQPOuf76eoQAslBQ_yKrGMl2n";
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 🛠️ Διορθωμένη αρχικοποίηση για απευθείας χρήση στον browser
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let campaigns = [], numbers = [], history = [];
 let editCampId = null;
