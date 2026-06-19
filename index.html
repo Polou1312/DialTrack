@@ -90,7 +90,6 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 const SUPABASE_URL = "https://arlpuqxklhdocaeyevrr.supabase.co";
 const SUPABASE_KEY = "sb_publishable_b4ZPk4iQPOuf76eoQAslBQ_yKrGMl2n";
 
-// 🛠️ Διορθωμένη αρχικοποίηση για απευθείας χρήση στον browser
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let campaigns = [], numbers = [], history = [];
@@ -106,7 +105,7 @@ async function loadData() {
         numbers = resNums.data || [];
         history = resHist.data || [];
         render();
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Σφάλμα φόρτωσης:", e); }
 }
 
 function showView(id) {
@@ -170,21 +169,24 @@ async function saveCampaign() {
     const nextNumText = selectedNumObj ? selectedNumObj.number : 'Χωρίς Αριθμό';
     const currentLabel = code ? code + ' - ' + name : name;
 
-    if(editCampId) {
-        const oldCamp = campaigns.find(c => String(c.id) === String(editCampId));
-        const oldNumObj = numbers.find(num => String(num.id) === String(oldCamp.active_num_id));
-        const prevNumText = oldNumObj ? oldNumObj.number : 'Χωρίς Αριθμό';
-
-        if (String(oldCamp.active_num_id) !== String(active_num_id)) {
-            await supabase.from('history').insert([{ camp_name: currentLabel, note: 'Ο αριθμός άλλαξε από ' + prevNumText + ' σε ' + nextNumText }]);
-        }
-        await supabase.from('campaigns').update({ code, name, note, active_num_id }).eq('id', editCampId);
-    } else {
-        await supabase.from('campaigns').insert([{ code, name, note, active_num_id }]);
-        await supabase.from('history').insert([{ camp_name: currentLabel, note: 'Δημιουργία καμπάνιας με αριθμό: ' + nextNumText }]);
-    }
-    
     closeCampModal();
+
+    try {
+        if(editCampId) {
+            const oldCamp = campaigns.find(c => String(c.id) === String(editCampId));
+            const oldNumObj = numbers.find(num => String(num.id) === String(oldCamp.active_num_id));
+            const prevNumText = oldNumObj ? oldNumObj.number : 'Χωρίς Αριθμό';
+
+            if (String(oldCamp.active_num_id) !== String(active_num_id)) {
+                await supabase.from('history').insert([{ camp_name: currentLabel, note: 'Ο αριθμός άλλαξε από ' + prevNumText + ' σε ' + nextNumText }]);
+            }
+            await supabase.from('campaigns').update({ code, name, note, active_num_id }).eq('id', editCampId);
+        } else {
+            await supabase.from('campaigns').insert([{ code, name, note, active_num_id }]);
+            await supabase.from('history').insert([{ camp_name: currentLabel, note: 'Δημιουργία καμπάνιας με αριθμό: ' + nextNumText }]);
+        }
+    } catch(err) { console.error("Αποτυχία αποθήκευσης καμπάνιας:", err); }
+    
     loadData();
 }
 
@@ -204,21 +206,28 @@ function openEditCamp(id) {
 async function saveNumber() {
     const val = document.getElementById('numValue').value.trim();
     if(!val) return alert('Βάλε αριθμό!');
-    await supabase.from('numbers').insert([{ number: val, label: document.getElementById('numLabel').value.trim() }]);
     closeModal('numModal');
+
+    try {
+        await supabase.from('numbers').insert([{ number: val, label: document.getElementById('numLabel').value.trim() }]);
+    } catch(err) { console.error("Αποτυχία αποθήκευσης αριθμού:", err); }
+    
     loadData();
 }
 
 async function deleteItem(type, id) {
     if(!confirm('Θέλετε σίγουρα διαγραφή;')) return;
-    if(type === 'campaigns') { 
-        const c = campaigns.find(camp => String(camp.id) === String(id));
-        const label = c ? (c.code ? c.code + ' - ' : '') + c.name : 'Καμπάνια';
-        await supabase.from('history').insert([{ camp_name: label, note: 'Διαγραφή καμπάνιας' }]);
-        await supabase.from('campaigns').delete().eq('id', id);
-    } else { 
-        await supabase.from('numbers').delete().eq('id', id);
-    }
+    try {
+        if(type === 'campaigns') { 
+            const c = campaigns.find(camp => String(camp.id) === String(id));
+            const label = c ? (c.code ? c.code + ' - ' : '') + c.name : 'Καμπάνια';
+            await supabase.from('history').insert([{ camp_name: label, note: 'Διαγραφή καμπάνιας' }]);
+            await supabase.from('campaigns').delete().eq('id', id);
+        } else { 
+            await supabase.from('numbers').delete().eq('id', id);
+        }
+    } catch(err) { console.error("Αποτυχία διαγραφής:", err); }
+    
     loadData();
 }
 
