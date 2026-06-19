@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DialTrack - Διαχείριση με Ιστορικό Αλλαγών</title>
+<title>DialTrack - SQL Cloud</title>
 <style>
 body{font-family:Arial,sans-serif;background:#111;color:#eee;margin:0;min-height:100vh;display:flex}
 .sidebar{width:240px;background:#1b1b1b;padding:16px;box-sizing:border-box;border-right:1px solid #333}
@@ -20,11 +20,10 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 .table{width:100%;border-collapse:collapse}
 .table th,.table td{border-bottom:1px solid #333;padding:10px;text-align:left}
 .hidden{display:none}
-.backup-btn{background:#1e4620;border:1px solid #2e6931}
-.import-btn{background:#2a4d6c;border:1px solid #35628a}
 .edit-btn{background:#3a3a3a;border:1px solid #555;display:inline-block;width:auto;padding:5px 10px;font-size:12px;margin-right:5px}
 .del-btn{background:#5a1818;border:1px solid #822;display:inline-block;width:auto;padding:5px 10px;font-size:12px}
 </style>
+<script src="https://jsdelivr.net"></script>
 </head>
 <body>
 
@@ -34,20 +33,17 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 <button class="navbtn" onclick="showView('campaigns')">Καμπάνιες</button>
 <button class="navbtn" onclick="showView('numbers')">Αριθμοί</button>
 <button class="navbtn" onclick="showView('history')">Ιστορικό</button>
-<button style="background:#721c24;" onclick="resetData()">⚠️ Reset All</button>
+<button style="background:#222;color:#66ff66;border:1px solid #2e6931;" onclick="loadData()">🔄 Ανανέωση</button>
 </div>
 
 <div class="main">
-<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+<div style="display:flex;gap:10px;margin-bottom:16px;">
 <button style="width:auto" onclick="openModal('campModal')">+ Νέα Καμπάνια</button>
 <button style="width:auto" onclick="openModal('numModal')">+ Νέος Αριθμός</button>
-<button style="width:auto;margin-left:auto" class="backup-btn" onclick="downloadBackup()">📥 Download Δεδομένα</button>
-<button style="width:auto" class="import-btn" onclick="document.getElementById('fileInput').click()">📤 Upload Αρχείο</button>
-<input type="file" id="fileInput" class="hidden" accept=".json" onchange="uploadBackup(event)">
 </div>
 
 <div id="dashboard" class="view">
-<div class="card"><h3>Σύνοψη</h3><div id="stats"></div></div>
+<div class="card"><h3>Σύνοψη (SQL Cloud)</h3><div id="stats"></div></div>
 <div class="grid" id="campaignGrid"></div>
 </div>
 
@@ -69,7 +65,6 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 </div>
 </div>
 
-    <!-- Camp Modal -->
 <div class="modal" id="campModal">
 <div class="modalbox">
 <h3 id="campModalTitle">Νέα Καμπάνια</h3>
@@ -82,7 +77,6 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 </div>
 </div>
 
-<!-- Num Modal -->
 <div class="modal" id="numModal">
 <div class="modalbox">
 <h3>Νέος Αριθμός</h3>
@@ -93,25 +87,24 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 </div>
 </div>
 <script>
+const SUPABASE_URL = "https://arlpuqxklhdocaeyevrr.supabase.co";
+const SUPABASE_KEY = "sb_publishable_b4ZPk4iQPOuf76eoQAslBQ_yKrGMl2n";
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 let campaigns = [], numbers = [], history = [];
 let editCampId = null;
 
-function loadData() {
-    let localC = localStorage.getItem('dt_campaigns');
-    let localN = localStorage.getItem('dt_numbers');
-    let localH = localStorage.getItem('dt_history');
-    
-    campaigns = localC ? JSON.parse(localC) : [];
-    numbers = localN ? JSON.parse(localN) : [];
-    history = localH ? JSON.parse(localH) : [];
-    render();
-}
+async function loadData() {
+    try {
+        const resCamps = await supabase.from('campaigns').select('*').order('created_at', { ascending: false });
+        const resNums = await supabase.from('numbers').select('*').order('created_at', { ascending: false });
+        const resHist = await supabase.from('history').select('*').order('created_at', { ascending: false });
 
-function saveData() {
-    localStorage.setItem('dt_campaigns', JSON.stringify(campaigns));
-    localStorage.setItem('dt_numbers', JSON.stringify(numbers));
-    localStorage.setItem('dt_history', JSON.stringify(history));
-    render();
+        campaigns = resCamps.data || [];
+        numbers = resNums.data || [];
+        history = resHist.data || [];
+        render();
+    } catch (e) { console.error(e); }
 }
 
 function showView(id) {
@@ -146,28 +139,28 @@ function render() {
         const dispNum = n ? n.number : 'Χωρίς Αριθμό';
         const label = c.code ? c.code + ' - ' + c.name : c.name;
         
-        grid += '<div class="card"><strong>' + label + '</strong><br><small>Ενεργός Αριθμός: ' + dispNum + '</small><br><div style="margin-top:8px"><button class="edit-btn" onclick="openEditCamp(' + c.id + ')">🔄 Αλλαγή Αριθμού</button><button class="del-btn" onclick="deleteItem(\'campaigns\', ' + c.id + ')">Διαγραφή</button></div></div>';
+        grid += '<div class="card"><strong>' + label + '</strong><br><small>Ενεργός Αριθμός: ' + dispNum + '</small><br><div style="margin-top:8px"><button class="edit-btn" onclick="openEditCamp(' + c.id + ')">🔄 Αλλαγή Αριθμού</button><button class="del-btn" onclick="deleteItem(\'campaigns\',' + c.id + ')">Διαγραφή</button></div></div>';
         list += '<div class="card"><strong>' + label + '</strong> - ' + (c.note || '—') + '</div>';
     });
     document.getElementById('campaignGrid').innerHTML = grid || '<div class="small">Καμία καμπάνια</div>';
     document.getElementById('campaignList').innerHTML = list || '<div class="small">Καμία καμπάνια</div>';
 
     let numHtml = '';
-    numbers.forEach(n => numHtml += '<div class="card"><strong>' + n.number + '</strong> (' + (n.label || '—') + ')<br><button class="del-btn" style="margin-top:5px" onclick="deleteItem(\'numbers\', ' + n.id + ')">Διαγραφή</button></div>');
+    numbers.forEach(n => numHtml += '<div class="card"><strong>' + n.number + '</strong> (' + (n.label || '—') + ')<br><button class="del-btn" style="margin-top:5px" onclick="deleteItem(\'numbers\',' + n.id + ')">Διαγραφή</button></div>');
     document.getElementById('numbersList').innerHTML = numHtml || '<div class="small">Κανένας αριθμός</div>';
 
     let histHtml = '';
     history.forEach(h => {
-        histHtml += '<tr><td>' + fmtDate(h.created_at) + '</td><td><strong>' + h.camp_name + '</strong></td><td>' + h.note + '</td></tr>';
+        histHtml += '<tr><td>' + new Date(h.created_at).toLocaleString('el-GR') + '</td><td><strong>' + h.camp_name + '</strong></td><td>' + h.note + '</td></tr>';
     });
     document.getElementById('historyBody').innerHTML = histHtml || '<tr><td colspan="3">Κενό ιστορικό</td></tr>';
 }
 
-function saveCampaign() {
+async function saveCampaign() {
     const name = document.getElementById('campName').value.trim();
     const code = document.getElementById('campCode').value.trim();
     const note = document.getElementById('campNote').value.trim();
-    const active_num_id = document.getElementById('campNumberSelect').value;
+    const active_num_id = document.getElementById('campNumberSelect').value || null;
     
     if(!name) return alert('Βάλε όνομα!');
 
@@ -181,29 +174,16 @@ function saveCampaign() {
         const prevNumText = oldNumObj ? oldNumObj.number : 'Χωρίς Αριθμό';
 
         if (String(oldCamp.active_num_id) !== String(active_num_id)) {
-            history.unshift({
-                id: Date.now(),
-                camp_name: currentLabel,
-                note: 'Ο αριθμός άλλαξε από ' + prevNumText + ' σε ' + nextNumText,
-                created_at: new Date().toISOString()
-            });
+            await supabase.from('history').insert([{ camp_name: currentLabel, note: 'Ο αριθμός άλλαξε από ' + prevNumText + ' σε ' + nextNumText }]);
         }
-
-        campaigns = campaigns.map(c => String(c.id) === String(editCampId) ? { ...c, code, name, note, active_num_id } : c);
+        await supabase.from('campaigns').update({ code, name, note, active_num_id }).eq('id', editCampId);
     } else {
-        const newCamp = { id: Date.now(), code, name, note, active_num_id };
-        campaigns.push(newCamp);
-        
-        history.unshift({
-            id: Date.now() + 1,
-            camp_name: currentLabel,
-            note: 'Δημιουργία καμπάνιας με αριθμό: ' + nextNumText,
-            created_at: new Date().toISOString()
-        });
+        await supabase.from('campaigns').insert([{ code, name, note, active_num_id }]);
+        await supabase.from('history').insert([{ camp_name: currentLabel, note: 'Δημιουργία καμπάνιας με αριθμό: ' + nextNumText }]);
     }
     
     closeCampModal();
-    saveData();
+    loadData();
 }
 
 function openEditCamp(id) {
@@ -219,63 +199,31 @@ function openEditCamp(id) {
     }
 }
 
-function saveNumber() {
+async function saveNumber() {
     const val = document.getElementById('numValue').value.trim();
     if(!val) return alert('Βάλε αριθμό!');
-    numbers.push({ id: Date.now(), number: val, label: document.getElementById('numLabel').value.trim() });
-    closeModal('numModal'); 
-    saveData();
+    await supabase.from('numbers').insert([{ number: val, label: document.getElementById('numLabel').value.trim() }]);
+    closeModal('numModal');
+    loadData();
 }
 
-function deleteItem(type, id) {
+async function deleteItem(type, id) {
     if(!confirm('Θέλετε σίγουρα διαγραφή;')) return;
     if(type === 'campaigns') { 
         const c = campaigns.find(camp => String(camp.id) === String(id));
         const label = c ? (c.code ? c.code + ' - ' : '') + c.name : 'Καμπάνια';
-        history.unshift({ id: Date.now(), camp_name: label, note: 'Διαγραφή καμπάνιας', created_at: new Date().toISOString() });
-        campaigns = campaigns.filter(c => String(c.id) !== String(id)); 
+        await supabase.from('history').insert([{ camp_name: label, note: 'Διαγραφή καμπάνιας' }]);
+        await supabase.from('campaigns').delete().eq('id', id);
     } else { 
-        campaigns = campaigns.map(c => String(c.active_num_id) === String(id) ? { ...c, active_num_id: "" } : c);
-        numbers = numbers.filter(n => String(n.id) !== String(id)); 
+        await supabase.from('numbers').delete().eq('id', id);
     }
-    saveData();
+    loadData();
 }
 
-function downloadBackup() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ campaigns, numbers, history }));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "dialtrack_backup.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.removeChild(downloadAnchor);
-}
-
-function uploadBackup(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const parsed = JSON.parse(e.target.result);
-            campaigns = parsed.campaigns || [];
-            numbers = parsed.numbers || [];
-            history = parsed.history || [];
-            saveData();
-            alert("Επιτυχής εισαγωγή δεδομένων!");
-        } catch (err) { alert("Λάθος αρχείο!"); }
-    };
-    reader.readAsText(file);
-}
-
-function fmtDate(isoString) { 
-    if(!isoString) return '—';
-    return new Date(isoString).toLocaleString('el-GR');
-}
-
-function resetData() { if(confirm('⚠️ Διαγραφή όλων των τοπικών δεδομένων και ιστορικού;')) { campaigns = []; numbers = []; history = []; saveData(); } }
-
-window.onload = loadData;
+window.onload = () => {
+    loadData();
+    setInterval(loadData, 10000);
+};
 </script>
 </body>
 </html>
