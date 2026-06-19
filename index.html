@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DialTrack Cloud</title>
+<title>DialTrack - LocalStorage με Backup</title>
 <style>
 body{font-family:Arial,sans-serif;background:#111;color:#eee;margin:0;min-height:100vh;display:flex}
 .sidebar{width:240px;background:#1b1b1b;padding:16px;box-sizing:border-box;border-right:1px solid #333}
@@ -20,6 +20,8 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 .table{width:100%;border-collapse:collapse}
 .table th,.table td{border-bottom:1px solid #333;padding:10px;text-align:left}
 .hidden{display:none}
+.backup-btn{background:#1e4620;border:1px solid #2e6931}
+.import-btn{background:#2a4d6c;border:1px solid #35628a}
 </style>
 </head>
 <body>
@@ -30,13 +32,16 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 <button class="navbtn" onclick="showView('campaigns')">Καμπάνιες</button>
 <button class="navbtn" onclick="showView('numbers')">Αριθμοί</button>
 <button class="navbtn" onclick="showView('history')">Ιστορικό</button>
-<button style="background:#721c24;" onclick="resetData()">⚠️ Reset</button>
+<button style="background:#721c24;" onclick="resetData()">⚠️ Reset All</button>
 </div>
 
 <div class="main">
-<div style="display:flex;gap:10px;margin-bottom:16px">
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
 <button style="width:auto" onclick="openModal('campModal')">+ Νέα Καμπάνια</button>
 <button style="width:auto" onclick="openModal('numModal')">+ Νέος Αριθμός</button>
+<button style="width:auto;margin-left:auto" class="backup-btn" onclick="downloadBackup()">📥 Download Δεδομένα</button>
+<button style="width:auto" class="import-btn" onclick="document.getElementById('fileInput').click()">📤 Upload Αρχείο</button>
+<input type="file" id="fileInput" class="hidden" accept=".json" onchange="uploadBackup(event)">
 </div>
 
 <div id="dashboard" class="view">
@@ -87,43 +92,24 @@ input,select,textarea{width:100%;box-sizing:border-box;padding:10px;border-radiu
 </div>
 
 <script>
-// 🚀 Έτοιμη, ελεύθερη Cloud Storage λύση χωρίς κλειδιά ασφαλείας
-const BOX_URL = "https://jsonbin.io"; 
-// Επειδή το jsonbin θέλει key, χρησιμοποιούμε ένα 100% open Key-Value API (api.restful-api.dev)
-const CLOUD_STORAGE_KEY = "dialtrack_db_unique_key_2026";
-
 let campaigns = [], numbers = [], history = [];
 
-async function loadData() {
-    try {
-        // Διαβάζουμε από το LocalStorage αν αποτύχει το δίκτυο, αλλιώς από το ελεύθερο cloud fetch
-        const r = await fetch('https://api-ninjas.com' + CLOUD_STORAGE_KEY);
-        // Εναλλακτικά, για να μην έχουμε κανένα απολύτως σφάλμα δικτύου, αποθηκεύουμε τοπικά με αυτόματο backup
-        let localC = localStorage.getItem('dt_campaigns');
-        let localN = localStorage.getItem('dt_numbers');
-        let localH = localStorage.getItem('dt_history');
-        
-        campaigns = localC ? JSON.parse(localC) : [];
-        numbers = localN ? JSON.parse(localN) : [];
-        history = localH ? JSON.parse(localH) : [];
-        render();
-    } catch (e) {
-        render();
-    }
+function loadData() {
+    let localC = localStorage.getItem('dt_campaigns');
+    let localN = localStorage.getItem('dt_numbers');
+    let localH = localStorage.getItem('dt_history');
+    
+    campaigns = localC ? JSON.parse(localC) : [];
+    numbers = localN ? JSON.parse(localN) : [];
+    history = localH ? JSON.parse(localH) : [];
+    render();
 }
 
-async function saveData() {
-    try {
-        // Αποθηκεύουμε τοπικά στον browser για να μην κολλάει ΠΟΤΕ η οθόνη
-        localStorage.setItem('dt_campaigns', JSON.stringify(campaigns));
-        localStorage.setItem('dt_numbers', JSON.stringify(numbers));
-        localStorage.setItem('dt_history', JSON.stringify(history));
-        
-        // Στέλνουμε παράλληλα ένα αθόρυβο backup στο ίντερνετ χωρίς να διακόπτουμε τον χρήστη
-        render();
-    } catch (e) { 
-        alert("Σφάλμα αποθήκευσης!"); 
-    }
+function saveData() {
+    localStorage.setItem('dt_campaigns', JSON.stringify(campaigns));
+    localStorage.setItem('dt_numbers', JSON.stringify(numbers));
+    localStorage.setItem('dt_history', JSON.stringify(history));
+    render();
 }
 
 function showView(id) {
@@ -193,7 +179,34 @@ function deleteItem(type, id) {
     saveData();
 }
 
-function resetData() { if(confirm('⚠️ Reset;')) { campaigns = []; numbers = []; history = []; saveData(); } }
+function downloadBackup() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ campaigns, numbers, history }));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "dialtrack_backup.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.removeChild(downloadAnchor);
+}
+
+function uploadBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const parsed = JSON.parse(e.target.result);
+            campaigns = parsed.campaigns || [];
+            numbers = parsed.numbers || [];
+            history = parsed.history || [];
+            saveData();
+            alert("Επιτυχής εισαγωγή δεδομένων!");
+        } catch (err) { alert("Λάθος αρχείο!"); }
+    };
+    reader.readAsText(file);
+}
+
+function resetData() { if(confirm('⚠️ Διαγραφή όλων των τοπικών δεδομένων;')) { campaigns = []; numbers = []; history = []; saveData(); } }
 
 window.onload = loadData;
 </script>
